@@ -4,7 +4,7 @@ This project is a lightweight container runtime implemented in C, featuring kern
 
 Build and Setup
 First, compile the project and insert the kernel module into the host system.
-
+![Supervisor Listening](./ss1.png)
 Bash
 make
 sudo insmod monitor.ko
@@ -14,42 +14,42 @@ ls /dev/container_monitor
 Usage Guide
 1. Starting the Supervisor
 The supervisor acts as the central daemon managing container lifecycles.
-
+![Supervisor Listening](./ss2.png)
 Bash
 sudo ./engine supervisor ./rootfs-base
 : Shows the supervisor initializing and entering an idle state, listening for incoming commands via UNIX sockets.
 
 2. Starting a Container
 Launch a container with defined memory constraints (Soft and Hard limits).
-
+![Supervisor Listening](./ss3.png)
 Bash
 sudo ./engine start c1 ./rootfs-alpha /memory_hog --soft-mib 64 --hard-mib 72
 : Shows the engine spawning a new container process, assigning it a unique PID, and isolating it within the specified root filesystem.
 
 3. Monitoring State
 You can query the supervisor to list all active environments.
-
+![Supervisor Listening](./ss4.png)
 Bash
 sudo ./engine ps
 : A status table showing container names, PIDs, and their current 'RUNNING' state.
 
 4. Viewing Logs
 The system uses a bounded buffer to capture container output.
-
+![Supervisor Listening](./ss5.png)
 Bash
 sudo ./engine logs c1
 : The standard output of the application running inside the container, retrieved by the engine CLI.
 
 5. Kernel Memory Monitoring
 This demonstrates the interaction between the user-space process and the kernel module.
-
+![Supervisor Listening](./ss6.png)
 Bash
 sudo dmesg | tail -20
 : Kernel ring buffer logs showing the monitor module detecting a soft limit breach (warning) and hard limit enforcement.
 
 6. Resource Management & Multi-tenancy
 The runtime supports multiple concurrent containers and CPU prioritization.
-
+![Supervisor Listening](./ss7.png)
 Bash
 # Running Multiple Containers
 sudo ./engine start c2 ./rootfs-beta /memory_hog --soft-mib 64 --hard-mib 72
@@ -60,10 +60,10 @@ Bash
 sudo ./engine start fast ./rootfs-alpha /cpu_hog --nice 0
 sudo ./engine start slow ./rootfs-alpha /cpu_hog --nice 15
 : Illustrates how the runtime applies different Linux 'nice' values to influence CPU scheduling priority between containers.
-
+![Supervisor Listening](./ss8.png)
 Clean Teardown
 Gracefully stop containers and verify the system state is restored.
-
+![Supervisor Listening](./ss9.png)
 Bash
 sudo ./engine stop c1
 sudo ./engine stop c2
