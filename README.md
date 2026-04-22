@@ -1,111 +1,85 @@
-# Multi-Container Runtime
+Mini Container Runtime with Kernel Memory Monitoring
+Overview
+This project is a lightweight container runtime implemented in C, featuring kernel-level memory monitoring. It leverages custom Linux kernel modules to provide process isolation, communication, and resource enforcement.
 
-A lightweight Linux container runtime in C with a long-running supervisor and a kernel-space memory monitor.
+Build and Setup
+First, compile the project and insert the kernel module into the host system.
 
-Read [`project-guide.md`](project-guide.md) for the full project specification.
-
----
-
-## Getting Started
-
-### 1. Fork the Repository
-
-1. Go to [github.com/shivangjhalani/OS-Jackfruit](https://github.com/shivangjhalani/OS-Jackfruit)
-2. Click **Fork** (top-right)
-3. Clone your fork:
-
-```bash
-git clone https://github.com/<your-username>/OS-Jackfruit.git
-cd OS-Jackfruit
-```
-
-### 2. Set Up Your VM
-
-You need an **Ubuntu 22.04 or 24.04** VM with **Secure Boot OFF**. WSL will not work.
-
-Install dependencies:
-
-```bash
-sudo apt update
-sudo apt install -y build-essential linux-headers-$(uname -r)
-```
-
-### 3. Run the Environment Check
-
-```bash
-cd boilerplate
-chmod +x environment-check.sh
-sudo ./environment-check.sh
-```
-
-Fix any issues reported before moving on.
-
-### 4. Prepare the Root Filesystem
-
-```bash
-mkdir rootfs-base
-wget https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-minirootfs-3.20.3-x86_64.tar.gz
-tar -xzf alpine-minirootfs-3.20.3-x86_64.tar.gz -C rootfs-base
-
-# Make one writable copy per container you plan to run
-cp -a ./rootfs-base ./rootfs-alpha
-cp -a ./rootfs-base ./rootfs-beta
-```
-
-Do not commit `rootfs-base/` or `rootfs-*` directories to your repository.
-
-### 5. Understand the Boilerplate
-
-The `boilerplate/` folder contains starter files:
-
-| File                   | Purpose                                             |
-| ---------------------- | --------------------------------------------------- |
-| `engine.c`             | User-space runtime and supervisor skeleton          |
-| `monitor.c`            | Kernel module skeleton                              |
-| `monitor_ioctl.h`      | Shared ioctl command definitions                    |
-| `Makefile`             | Build targets for both user-space and kernel module |
-| `cpu_hog.c`            | CPU-bound test workload                             |
-| `io_pulse.c`           | I/O-bound test workload                             |
-| `memory_hog.c`         | Memory-consuming test workload                      |
-| `environment-check.sh` | VM environment preflight check                      |
-
-Use these as your starting point. You are free to restructure the repository however you want — the submission requirements are listed in the project guide.
-
-### 6. Build and Verify
-
-```bash
-cd boilerplate
+Bash
 make
-```
+sudo insmod monitor.ko
+ls /dev/container_monitor
+: Displays the compilation process and confirms the kernel module is successfully loaded and registered as a character device in /dev.
 
-If this compiles without errors, your environment is ready.
+Usage Guide
+1. Starting the Supervisor
+The supervisor acts as the central daemon managing container lifecycles.
 
-### 7. GitHub Actions Smoke Check
+Bash
+sudo ./engine supervisor ./rootfs-base
+: Shows the supervisor initializing and entering an idle state, listening for incoming commands via UNIX sockets.
 
-Your fork will inherit a minimal GitHub Actions workflow from this repository.
+2. Starting a Container
+Launch a container with defined memory constraints (Soft and Hard limits).
 
-That workflow only performs CI-safe checks:
+Bash
+sudo ./engine start c1 ./rootfs-alpha /memory_hog --soft-mib 64 --hard-mib 72
+: Shows the engine spawning a new container process, assigning it a unique PID, and isolating it within the specified root filesystem.
 
-- `make -C boilerplate ci`
-- user-space binary compilation (`engine`, `memory_hog`, `cpu_hog`, `io_pulse`)
-- `./boilerplate/engine` with no arguments must print usage and exit with a non-zero status
+3. Monitoring State
+You can query the supervisor to list all active environments.
 
-The CI-safe build command is:
+Bash
+sudo ./engine ps
+: A status table showing container names, PIDs, and their current 'RUNNING' state.
 
-```bash
-make -C boilerplate ci
-```
+4. Viewing Logs
+The system uses a bounded buffer to capture container output.
 
-This smoke check does not test kernel-module loading, supervisor runtime behavior, or container execution.
+Bash
+sudo ./engine logs c1
+: The standard output of the application running inside the container, retrieved by the engine CLI.
 
----
+5. Kernel Memory Monitoring
+This demonstrates the interaction between the user-space process and the kernel module.
 
-## What to Do Next
+Bash
+sudo dmesg | tail -20
+: Kernel ring buffer logs showing the monitor module detecting a soft limit breach (warning) and hard limit enforcement.
 
-Read [`project-guide.md`](project-guide.md) end to end. It contains:
+6. Resource Management & Multi-tenancy
+The runtime supports multiple concurrent containers and CPU prioritization.
 
-- The six implementation tasks (multi-container runtime, CLI, logging, kernel monitor, scheduling experiments, cleanup)
-- The engineering analysis you must write
-- The exact submission requirements, including what your `README.md` must contain (screenshots, analysis, design decisions)
+Bash
+# Running Multiple Containers
+sudo ./engine start c2 ./rootfs-beta /memory_hog --soft-mib 64 --hard-mib 72
+: The ps command output confirming two independent containers running side-by-side.
 
-Your fork's `README.md` should be replaced with your own project documentation as described in the submission package section of the project guide. (As in get rid of all the above content and replace with your README.md)
+Bash
+# CPU Scheduling with Nice Values
+sudo ./engine start fast ./rootfs-alpha /cpu_hog --nice 0
+sudo ./engine start slow ./rootfs-alpha /cpu_hog --nice 15
+: Illustrates how the runtime applies different Linux 'nice' values to influence CPU scheduling priority between containers.
+
+Clean Teardown
+Gracefully stop containers and verify the system state is restored.
+
+Bash
+sudo ./engine stop c1
+sudo ./engine stop c2
+sudo ./engine ps
+: The final state showing an empty process list, confirming that resources were released and the supervisor cleaned up the child processes.
+
+Key Features
+Process Isolation: Uses namespaces to jail processes within a specific rootfs.
+
+IPC: Robust UNIX socket communication between the CLI and the supervisor.
+
+Kernel Enforcement: A custom module monitors memory usage in real-time, bypassing traditional user-space lag.
+
+Tiered Limits: Implements a two-tier memory system (Soft warnings vs. Hard kills).
+
+Scheduling: Integrated support for CPU prioritization via nice values.
+
+Conclusion
+This project bridges the gap between user-space management and kernel-space enforcement, providing a transparent look at how modern container runtimes function at a low level.
